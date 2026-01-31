@@ -1,5 +1,5 @@
 # Parallel Chess Engine
-A high-performance chess engine developed in C that utilizes OpenMP to optimize move evaluation and decision-making through parallel computing.
+A high-performance chess engine developed in C that utilizes OpenMP to optimize move evaluation and decision-making through parallel computing. This was the final project for my CDA4125: Concepts of Parallel & Distributed Processing course.
 
 ## 📌 Project Overview
 Traditional chess engines face combinatorial complexity, making exhaustive game-tree searches computationally expensive as depth increases. This project implements a parallelized Minimax algorithm with Alpha-Beta pruning to distribute workloads across multiple CPU cores, significantly reducing computation time while maintaining move quality.
