@@ -1,0 +1,211 @@
+#include "board.h"
+#include <stdio.h>
+#include <string.h>
+
+// Initialize the board with standard chess positions
+void init_board(struct config *board) {
+    memset(board->board, ' ', sizeof(board->board));
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        board->board[1][i] = 'P'; // White pawns
+        board->board[6][i] = 'p'; // Black pawns
+    }
+    board->board[0][0] = 'R'; board->board[0][7] = 'R'; // White rooks
+    board->board[0][1] = 'N'; board->board[0][6] = 'N'; // White knights
+    board->board[0][2] = 'B'; board->board[0][5] = 'B'; // White bishops
+    board->board[0][3] = 'Q'; board->board[0][4] = 'K'; // White queen and king
+    board->board[7][0] = 'r'; board->board[7][7] = 'r'; // Black rooks
+    board->board[7][1] = 'n'; board->board[7][6] = 'n'; // Black knights
+    board->board[7][2] = 'b'; board->board[7][5] = 'b'; // Black bishops
+    board->board[7][3] = 'q'; board->board[7][4] = 'k'; // Black queen and king
+    board->turn = MAX; // White starts
+}
+
+// Print the board to the console
+void print_board(struct config *board) {
+    printf("\n  a b c d e f g h\n");
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        printf("%d ", 8 - i);
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            printf("%c ", board->board[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
+// Helper: Add a move to the successors list
+int add_move(struct config *conf, int from_x, int from_y, int to_x, int to_y, struct config *successors, int *num_successors) {
+    if (to_x >= 0 && to_x < BOARD_SIZE && to_y >= 0 && to_y < BOARD_SIZE) {
+        if ((conf->turn == MAX && conf->board[to_x][to_y] >= 'a' && conf->board[to_x][to_y] <= 'z') || // White capturing Black
+            (conf->turn == MIN && conf->board[to_x][to_y] >= 'A' && conf->board[to_x][to_y] <= 'Z') || // Black capturing White
+            conf->board[to_x][to_y] == ' ') { // Empty square
+            struct config new_conf = *conf;
+            new_conf.board[to_x][to_y] = new_conf.board[from_x][from_y];
+            new_conf.board[from_x][from_y] = ' ';
+            new_conf.turn *= -1; // Switch turn
+            successors[*num_successors] = new_conf;
+            (*num_successors)++;
+            return 1; // Move successfully added
+        }
+    }
+    return 0; // Move invalid
+}
+
+
+// Generate King moves
+void generate_king_moves(struct config *conf, int x, int y, struct config *successors, int *num_successors) {
+    for (int dx = -1; dx <= 1; dx++) {
+        for (int dy = -1; dy <= 1; dy++) {
+            if (dx != 0 || dy != 0) {
+                add_move(conf, x, y, x + dx, y + dy, successors, num_successors);
+            }
+        }
+    }
+}
+
+// Generate Knight moves
+void generate_knight_moves(struct config *conf, int x, int y, struct config *successors, int *num_successors) {
+    int moves[8][2] = {
+        {2, 1}, {2, -1}, {-2, 1}, {-2, -1},
+        {1, 2}, {1, -2}, {-1, 2}, {-1, -2}
+    };
+    for (int i = 0; i < 8; i++) {
+        add_move(conf, x, y, x + moves[i][0], y + moves[i][1], successors, num_successors);
+    }
+}
+
+// Generate Bishop moves
+void generate_bishop_moves(struct config *conf, int x, int y, struct config *successors, int *num_successors) {
+    for (int dx = -1; dx <= 1; dx += 2) {
+        for (int dy = -1; dy <= 1; dy += 2) {
+            for (int step = 1; step < BOARD_SIZE; step++) {
+                if (!add_move(conf, x, y, x + step * dx, y + step * dy, successors, num_successors)) break;
+            }
+        }
+    }
+}
+
+// Generate Rook moves
+void generate_rook_moves(struct config *conf, int x, int y, struct config *successors, int *num_successors) {
+    for (int dx = -1; dx <= 1; dx++) {
+        for (int dy = -1; dy <= 1; dy++) {
+            if ((dx == 0 || dy == 0) && (dx != dy)) {
+                for (int step = 1; step < BOARD_SIZE; step++) {
+                    if (!add_move(conf, x, y, x + step * dx, y + step * dy, successors, num_successors)) break;
+                }
+            }
+        }
+    }
+}
+
+
+// Generate Queen moves
+void generate_queen_moves(struct config *conf, int x, int y, struct config *successors, int *num_successors) {
+    generate_bishop_moves(conf, x, y, successors, num_successors);
+    generate_rook_moves(conf, x, y, successors, num_successors);
+}
+
+// Generate Pawn moves
+void generate_pawn_moves(struct config *conf, int x, int y, struct config *successors, int *num_successors) {
+    if (conf->board[x][y] == 'P') { // White pawn
+        // Forward move
+        if (x > 0 && conf->board[x - 1][y] == ' ') {
+            add_move(conf, x, y, x - 1, y, successors, num_successors);
+
+            // Double move from starting position
+            if (x == 6 && conf->board[x - 2][y] == ' ') {
+                add_move(conf, x, y, x - 2, y, successors, num_successors);
+            }
+        }
+
+        // Captures
+        if (x > 0 && y > 0 && conf->board[x - 1][y - 1] >= 'a' && conf->board[x - 1][y - 1] <= 'z') {
+            add_move(conf, x, y, x - 1, y - 1, successors, num_successors);
+        }
+        if (x > 0 && y < BOARD_SIZE - 1 && conf->board[x - 1][y + 1] >= 'a' && conf->board[x - 1][y + 1] <= 'z') {
+            add_move(conf, x, y, x - 1, y + 1, successors, num_successors);
+        }
+
+        // Promotion
+        if (x - 1 == 0) {
+            struct config promoted_conf = *conf;
+            promoted_conf.board[x - 1][y] = 'Q'; // Promote to Queen (default)
+            promoted_conf.board[x][y] = ' ';
+            promoted_conf.turn *= -1;
+            successors[*num_successors] = promoted_conf;
+            (*num_successors)++;
+        }
+    } else if (conf->board[x][y] == 'p') { // Black pawn
+        // Forward move
+        if (x < BOARD_SIZE - 1 && conf->board[x + 1][y] == ' ') {
+            add_move(conf, x, y, x + 1, y, successors, num_successors);
+
+            // Double move from starting position
+            if (x == 1 && conf->board[x + 2][y] == ' ') {
+                add_move(conf, x, y, x + 2, y, successors, num_successors);
+            }
+        }
+
+        // Captures
+        if (x < BOARD_SIZE - 1 && y > 0 && conf->board[x + 1][y - 1] >= 'A' && conf->board[x + 1][y - 1] <= 'Z') {
+            add_move(conf, x, y, x + 1, y - 1, successors, num_successors);
+        }
+        if (x < BOARD_SIZE - 1 && y < BOARD_SIZE - 1 && conf->board[x + 1][y + 1] >= 'A' && conf->board[x + 1][y + 1] <= 'Z') {
+            add_move(conf, x, y, x + 1, y + 1, successors, num_successors);
+        }
+
+        // Promotion
+        if (x + 1 == BOARD_SIZE - 1) {
+            struct config promoted_conf = *conf;
+            promoted_conf.board[x + 1][y] = 'q'; // Promote to Queen (default)
+            promoted_conf.board[x][y] = ' ';
+            promoted_conf.turn *= -1;
+            successors[*num_successors] = promoted_conf;
+            (*num_successors)++;
+        }
+    }
+}
+
+//Player Move
+int player_move(struct config *board, char *from, char *to) {
+    int from_x = 8 - (from[1] - '0');
+    int from_y = from[0] - 'a';
+    int to_x = 8 - (to[1] - '0');
+    int to_y = to[0] - 'a';
+
+    if (from_x < 0 || from_x >= BOARD_SIZE || to_x < 0 || to_x >= BOARD_SIZE ||
+        from_y < 0 || from_y >= BOARD_SIZE || to_y < 0 || to_y >= BOARD_SIZE) {
+        return 0; // Invalid move
+    }
+
+    // Move the piece (validation is simplified for now)
+    board->board[to_x][to_y] = board->board[from_x][from_y];
+    board->board[from_x][from_y] = ' ';
+    board->turn *= -1; // Switch turn
+    return 1; // Move executed successfully
+}
+
+//Check if game is over
+
+
+//Generate Succesors
+void generate_successors(struct config *conf, struct config *successors, int *num_successors) {
+    *num_successors = 0;
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            char piece = conf->board[i][j];
+            if ((conf->turn == MAX && piece >= 'A' && piece <= 'Z') ||  // White's turn
+                (conf->turn == MIN && piece >= 'a' && piece <= 'z')) { // Black's turn
+                switch (piece) {
+                    case 'P': case 'p': generate_pawn_moves(conf, i, j, successors, num_successors); break;
+                    case 'K': case 'k': generate_king_moves(conf, i, j, successors, num_successors); break;
+                    case 'Q': case 'q': generate_queen_moves(conf, i, j, successors, num_successors); break;
+                    case 'B': case 'b': generate_bishop_moves(conf, i, j, successors, num_successors); break;
+                    case 'N': case 'n': generate_knight_moves(conf, i, j, successors, num_successors); break;
+                    case 'R': case 'r': generate_rook_moves(conf, i, j, successors, num_successors); break;
+                }
+            }
+        }
+    }
+}
+
